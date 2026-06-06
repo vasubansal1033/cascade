@@ -5,11 +5,13 @@ by [Anirudh Rowjee](https://rowjee.com), Software Engineer - Storage @ Couchbase
 
 We will go in depth to understand how a Log-Structured Merge Tree works — the storage engine architecture behind databases like RocksDB, LevelDB, Cassandra, and Couchbase. By the end of this workshop, you will have written your own LSM Tree in Go that can handle writes, reads, and deletions, persist data to disk in SSTable format, and run a full tiered compaction pass across levels.
 
+We define **read amplification** as the number of disk IO calls required to serve a single read operation.
+
 The central tension we will explore: **what are you paying for reads when writes are relatively cheap?** Every design decision in an LSM Tree is a response to that question. You will feel this tradeoff directly, through a read IO counter that tracks how many IOs a read requires as data accumulates across levels.
 
 ## Who is it for?
 
-Engineers with moderate systems programming experience who want to understand how LSM Trees work internally — and why they are designed the way they are. No prior database internals knowledge is required, but comfort with a systems programming language is expected.
+Engineers with moderate systems programming experience who want to understand how LSM Trees work internally — and why they are designed the way they are. No prior database internals knowledge is required, but comfort with a systems programming language is expected. Basic comfort with file IO and goroutines is helpful but not a prerequisite.
 
 ## Format
 
@@ -21,34 +23,50 @@ A working LSM Tree in Go with three on-disk levels — an unsorted L0, and two s
 
 - `GET`, `UPSERT`, and `DELETE` (with tombstones)
 - Flushing to disk in SSTable format
-- Reads across all three levels
+- 1 KB memtable with memtable swap
+- Reads across all three levels (amplification factor of 10: L0 = 10 KB, L1 = 100 KB, L2 = 1 MB)
 - Checkpointing and recovery
 - Tiered compaction across levels
 
-We will also instrument the engine with a read IO counter, so that the impact of compaction on read amplification is directly observable.
+We will also instrument the engine with a read IO counter, so that the impact of compaction and read path design on read amplification is directly observable.
 
 ## Stages
 
+Run the tests for a specific stage with `go test -run TestStageN ./...`
+
 1. **Setup** — Get the skeleton repository running, understand the testing harness, and run the first milestone tests. Sets the feedback loop for the rest of the workshop.
 2. **Flush** — Persist data to disk as an SSTable. Introduce the on-disk format and discuss encoding choices.
-3. **L0 Reads** — Implement reads from L0. Introduce the read IO counter. See directly what a read costs when data is scattered across SSTables.
-4. **Checkpointing and Recovery** — Handle restarts gracefully: checkpoint current state and recover it on startup.
+3. **L0 Reads** — Implement reads from L0 SSTables. Introduce the read IO counter. See directly what a read costs when data is scattered across SSTables in a single level.
+4. **Checkpointing and Recovery** — Handle restarts gracefully: snapshot current state to disk with `Sync` and restore it on startup with `Restart`.
 5. **Compaction in Isolation** — Understand the compaction algorithm as a standalone problem: merging and sorting two SSTable streams, handling tombstones, producing a new SSTable.
-6. **Tiered Compaction End-to-End** — Wire compaction into the engine. Implement a full tiered compaction pass across L0, L1, and L2. Observe the reduction in read IOs as compaction runs.
+6. **Tiered Compaction End-to-End** — Wire compaction into the engine. Implement a full tiered compaction pass across L0, L1, and L2. Observe the reduction in read IOs as compaction consolidates SSTables.
 
 ## Outcome
+
+By the end of this workshop you will understand:
 
 - The write-optimised tradeoff at the heart of LSM Trees, and why it exists
 - The on-disk layout of an SSTable and how it is written and read
 - Why L0 is unsorted, and what that costs on the read path
 - How tombstones work and why deletes are non-trivial
-- How reads degrade as SSTables accumulate, and how compaction recovers them
+- How read amplification grows as SSTables accumulate, and how compaction recovers it
 - The tiered compaction algorithm: what it costs in write amplification, what it saves in implementation complexity
 - What real systems like LevelDB and RocksDB extend from this foundation
 
 ## Tooling
 
-Go, with third-party libraries for the in-memory map and disk encoding. A skeleton repository with sample data, a load generation harness, and per-milestone tests will be provided.
+Go. A skeleton repository with type definitions, method stubs, and per-stage tests is provided — you write the implementations.
+
+Run a specific stage:
+
+```
+go test -run TestStage1 ./...   # Setup
+go test -run TestStage2 ./...   # Flush
+go test -run TestStage3 ./...   # L0 Reads
+go test -run TestStage4 ./...   # Checkpointing and Recovery
+go test -run TestStage5 ./...   # Compaction in Isolation
+go test -run TestStage6 ./...   # Tiered Compaction End-to-End
+```
 
 ## Further Reading
 

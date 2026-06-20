@@ -21,6 +21,13 @@ func newTestEngine(t *testing.T) *cascade.Engine {
 	return e
 }
 
+func TestState1_Sanity(t *testing.T) {
+	_, err := cascade.NewEngine(t.TempDir())
+	if err != nil {
+		t.Error("Sanity test is failing!!")
+	}
+}
+
 func TestStage1_UpsertAndGet(t *testing.T) {
 	e := newTestEngine(t)
 	if err := e.Upsert("hello", []byte("world")); err != nil {

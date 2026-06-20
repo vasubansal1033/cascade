@@ -32,7 +32,9 @@ type Engine struct {
 	dataDir   string
 }
 
-func NewEngine(dataDir string) (*Engine, error) { return nil, nil }
+func NewEngine(dataDir string) (*Engine, error) {
+	return nil, errors.New("This shouldn't fail! Fix me!!!!!")
+}
 
 func (e *Engine) Get(key string) ([]byte, error)        { return nil, ErrNotFound }
 func (e *Engine) Upsert(key string, value []byte) error { return nil }

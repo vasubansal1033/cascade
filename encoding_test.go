@@ -103,3 +103,78 @@ func TestEncodeDecodeNPE_DiskRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// IndexEntry encoding
+// ---------------------------------------------------------------------------
+
+func TestEncodeDecodeIndexEntry(t *testing.T) {
+	entry := cascade.IndexEntry{DataBlockNum: 3, HighKey: "key-0000000099"}
+	got, err := cascade.DecodeIndexEntry(bytes.NewReader(cascade.EncodeIndexEntry(entry)))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != entry {
+		t.Fatalf("got %+v, want %+v", got, entry)
+	}
+}
+
+func TestDecodeIndexEntry_InvalidMagic(t *testing.T) {
+	_, err := cascade.DecodeIndexEntry(bytes.NewReader([]byte{0x00, 0x00, 0x00, 0x00}))
+	if !errors.Is(err, cascade.ErrInvalidIndexEntryMagic) {
+		t.Fatalf("expected ErrInvalidIndexEntryMagic, got %v", err)
+	}
+}
+
+func TestDecodeIndexEntry_EOF(t *testing.T) {
+	_, err := cascade.DecodeIndexEntry(bytes.NewReader([]byte{}))
+	if err != io.EOF {
+		t.Fatalf("expected io.EOF on empty reader, got %v", err)
+	}
+}
+
+func TestIndexEntryEncodedSize(t *testing.T) {
+	e := cascade.IndexEntry{DataBlockNum: 0, HighKey: "key-0000000001"}
+	if got := cascade.IndexEntryEncodedSize(e); got != 6+len("key-0000000001") {
+		t.Fatalf("got %d, want %d", got, 6+len("key-0000000001"))
+	}
+}
+
+// TestEncodeDecodeIndexEntry_DiskRoundTrip writes index entries to a real file and
+// reads each back by seeking to its computed byte offset.
+func TestEncodeDecodeIndexEntry_DiskRoundTrip(t *testing.T) {
+	entries := []cascade.IndexEntry{
+		{DataBlockNum: 0, HighKey: "key-0000000109"},
+		{DataBlockNum: 1, HighKey: "key-0000000219"},
+		{DataBlockNum: 2, HighKey: "key-0000000329"},
+	}
+
+	f, err := os.CreateTemp(t.TempDir(), "idx-*.bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	offsets := make([]int64, len(entries))
+	pos := int64(0)
+	for i, e := range entries {
+		offsets[i] = pos
+		if _, err := f.Write(cascade.EncodeIndexEntry(e)); err != nil {
+			t.Fatal(err)
+		}
+		pos += int64(cascade.IndexEntryEncodedSize(e))
+	}
+
+	for i, want := range entries {
+		if _, err := f.Seek(offsets[i], io.SeekStart); err != nil {
+			t.Fatal(err)
+		}
+		got, err := cascade.DecodeIndexEntry(f)
+		if err != nil {
+			t.Fatalf("entry %d: unexpected error: %v", i, err)
+		}
+		if got != want {
+			t.Fatalf("entry %d: got %+v, want %+v", i, got, want)
+		}
+	}
+}

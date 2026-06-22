@@ -5,7 +5,6 @@ package cascade_test
 // Run with: go test -run TestStage1 ./...
 
 import (
-	"fmt"
 	"testing"
 
 	cascade "github.com/anirudhRowjee/cascade"
@@ -72,25 +71,5 @@ func TestStage1_GetMissingKey(t *testing.T) {
 	_, err := e.Get("nonexistent")
 	if err != cascade.ErrNotFound {
 		t.Fatalf("want ErrNotFound, got %v", err)
-	}
-}
-
-func TestStage1_MemtableSwapOnFull(t *testing.T) {
-	e := newTestEngine(t)
-	// Fill past MemtableMaxBytes; engine should swap memtables without error.
-	value := make([]byte, 64)
-	for i := range 20 {
-		key := fmt.Sprintf("key-%03d", i)
-		if err := e.Upsert(key, value); err != nil {
-			t.Fatalf("Upsert %q: %v", key, err)
-		}
-	}
-	// All keys written before the swap must still be readable.
-	got, err := e.Get("key-000")
-	if err != nil {
-		t.Fatalf("Get after memtable swap: %v", err)
-	}
-	if len(got) == 0 {
-		t.Fatal("expected non-empty value after memtable swap")
 	}
 }

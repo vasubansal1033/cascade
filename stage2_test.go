@@ -5,10 +5,32 @@ package cascade_test
 // Run with: go test -run TestStage2 ./...
 
 import (
+	"errors"
+	"io/fs"
+	"os"
 	"testing"
 
 	cascade "github.com/anirudhRowjee/cascade"
 )
+
+func TestStage2_HomeDirIsCreated(t *testing.T) {
+	testPath := "./cascade_data"
+	cascade.NewEngine(testPath)
+
+	info, err := os.Stat(testPath)
+	if err != nil {
+		if !info.IsDir() {
+			t.Fatal("File exists but not as directory")
+		}
+		if errors.Is(err, fs.ErrNotExist) {
+			t.Fatal("Directory does not exist")
+		}
+		if errors.Is(err, fs.ErrPermission) {
+			t.Fatal("Permissions not present on directory")
+		}
+	}
+
+}
 
 // Flushing a non-empty memtable must create at least one SSTable file on disk.
 func TestStage2_FlushCreatesSSTableFile(t *testing.T) {

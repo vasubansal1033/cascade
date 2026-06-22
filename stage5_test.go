@@ -17,15 +17,15 @@ func TestStage5_MergeNonOverlappingKeys(t *testing.T) {
 	dir := t.TempDir()
 
 	a, err := cascade.WriteSSTable(dir+"/a.sst", []cascade.KVEntry{
-		{Key: "apple", Entry: cascade.Entry{Value: []byte("1")}},
-		{Key: "cherry", Entry: cascade.Entry{Value: []byte("3")}},
+		{Key: "apple", Value: "1"},
+		{Key: "cherry", Value: "3"},
 	})
 	if err != nil {
 		t.Fatalf("WriteSSTable a: %v", err)
 	}
 	b, err := cascade.WriteSSTable(dir+"/b.sst", []cascade.KVEntry{
-		{Key: "banana", Entry: cascade.Entry{Value: []byte("2")}},
-		{Key: "date", Entry: cascade.Entry{Value: []byte("4")}},
+		{Key: "banana", Value: "2"},
+		{Key: "date", Value: "4"},
 	})
 	if err != nil {
 		t.Fatalf("WriteSSTable b: %v", err)
@@ -57,10 +57,10 @@ func TestStage5_MergeOverlappingKeysNewerWins(t *testing.T) {
 	dir := t.TempDir()
 
 	older, _ := cascade.WriteSSTable(dir+"/older.sst", []cascade.KVEntry{
-		{Key: "k", Entry: cascade.Entry{Value: []byte("old")}},
+		{Key: "k", Value: "old"},
 	})
 	newer, _ := cascade.WriteSSTable(dir+"/newer.sst", []cascade.KVEntry{
-		{Key: "k", Entry: cascade.Entry{Value: []byte("new")}},
+		{Key: "k", Value: "new"},
 	})
 
 	counter := cascade.NewIOCounter()
@@ -88,11 +88,11 @@ func TestStage5_MergeDropsTombstonesWhenOlderValueExists(t *testing.T) {
 	dir := t.TempDir()
 
 	older, _ := cascade.WriteSSTable(dir+"/older.sst", []cascade.KVEntry{
-		{Key: "k", Entry: cascade.Entry{Value: []byte("alive")}},
+		{Key: "k", Value: "alive"},
 	})
 	newer, _ := cascade.WriteSSTable(dir+"/newer.sst", []cascade.KVEntry{
-		{Key: "k", Entry: cascade.Entry{Tombstone: true}},
-	})
+		{Key: "k", Value: "", IsTombstone: true}},
+	)
 
 	counter := cascade.NewIOCounter()
 	merged, err := cascade.MergeSSTables([]*cascade.SSTable{newer}, []*cascade.SSTable{older}, dir+"/merged.sst", counter)
@@ -114,12 +114,12 @@ func TestStage5_MergeOutputIsSorted(t *testing.T) {
 	dir := t.TempDir()
 
 	a, _ := cascade.WriteSSTable(dir+"/a.sst", []cascade.KVEntry{
-		{Key: "c", Entry: cascade.Entry{Value: []byte("3")}},
-		{Key: "a", Entry: cascade.Entry{Value: []byte("1")}},
+		{Key: "c", Value: "3"},
+		{Key: "a", Value: "1"},
 	})
 	b, _ := cascade.WriteSSTable(dir+"/b.sst", []cascade.KVEntry{
-		{Key: "d", Entry: cascade.Entry{Value: []byte("4")}},
-		{Key: "b", Entry: cascade.Entry{Value: []byte("2")}},
+		{Key: "d", Value: "4"},
+		{Key: "b", Value: "2"},
 	})
 
 	counter := cascade.NewIOCounter()

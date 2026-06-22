@@ -3,6 +3,7 @@ package cascade
 import (
 	"errors"
 	"path/filepath"
+	"sync/atomic"
 )
 
 var ErrNotFound = errors.New("not found")
@@ -22,14 +23,23 @@ type Checkpoint struct {
 	Memtable []KVEntry // snapshot of the active memtable at checkpoint time
 }
 
+// Snapshot struct that captures in-memory, point in time disk state
+type Snapshot struct {
+	snapshotID uint64
+	l0         []*SSTable // unsorted; newest-first on reads
+	l1         []*SSTable // sorted by key range
+	l2         []*SSTable // sorted by key range
+}
+
 type Engine struct {
-	active    *Memtable  // receives new writes
-	immutable *Memtable  // swapped out, waiting to be flushed; nil when idle
-	l0        []*SSTable // unsorted; newest-first on reads
-	l1        []*SSTable // sorted by key range
-	l2        []*SSTable // sorted by key range
+	// Core data path
+	memtable     *Memtable
+	currSnapshot Snapshot
+	highSeqNo    atomic.Uint64
+
+	dataDir string
+
 	ioCounter *IOCounter
-	dataDir   string
 }
 
 func NewEngine(dataDir string) (*Engine, error) {

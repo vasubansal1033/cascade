@@ -1,6 +1,11 @@
 package cascade
 
-import "errors"
+import (
+	"encoding/binary"
+	"errors"
+	"os"
+	"time"
+)
 
 var ErrKeyNotFound = errors.New("key not found")
 
@@ -45,7 +50,89 @@ type SSTable struct {
 	Path string
 }
 
-func WriteSSTable(path string, entries []KVEntry) (*SSTable, error) { return nil, nil }
+func WriteSSTable(path string, entries []KVEntry) (*SSTable, error) {
+	if len(entries) == 0 {
+		return nil, errors.New("cannot write SSTable with no entries")
+	}
+
+	// Phase 1: pack entries into data blocks, collecting one IndexEntry per sealed block.
+	// entries is assumed pre-sorted (memtable flushes in key order).
+	var dataBlocks []*Block
+	var indexEntries []IndexEntry
+
+	current := NewBlock(BlockTypeData)
+	var highKey string
+
+	closeCurrentBlock := func() {
+		dataBlocks = append(dataBlocks, current)
+		indexEntries = append(indexEntries, IndexEntry{
+			DataBlockNum: uint16(len(dataBlocks) - 1),
+			HighKey:      highKey,
+		})
+		current = NewBlock(BlockTypeData)
+	}
+
+	for _, entry := range entries {
+		encoded := EncodeNPE(entry)
+		if len(encoded) > current.Remaining() {
+			closeCurrentBlock()
+		}
+		current.Append(encoded)
+		highKey = entry.Key
+	}
+	closeCurrentBlock() // finalize the last (possibly partial) block
+
+	// Phase 2: build index block — one IndexEntry per data block
+	indexBlock := NewBlock(BlockTypeIndex)
+	for _, ie := range indexEntries {
+		indexBlock.Append(EncodeIndexEntry(ie))
+	}
+
+	// Phase 3: build header block
+	// Payload layout: table_num (8 bytes) | low and high key (NPE)
+	//                 item_count (8 bytes) | block_count (8 bytes)
+	headerBlock := NewBlock(BlockTypeHeader)
+
+	tableNumBuf := make([]byte, 8)
+	binary.BigEndian.PutUint64(tableNumBuf, uint64(time.Now().UnixNano()))
+	headerBlock.Append(tableNumBuf)
+
+	KeyRange := KVEntry{
+		Key:   entries[0].Key,              // Low Key for SSTable
+		Value: entries[len(entries)-1].Key, // High Key for SSTable
+	}
+	headerBlock.Append(EncodeNPE(KeyRange))
+
+	countBuf := make([]byte, 8)
+	binary.BigEndian.PutUint64(countBuf, uint64(len(entries)))
+	headerBlock.Append(countBuf)
+
+	binary.BigEndian.PutUint64(countBuf, uint64(len(dataBlocks)))
+	headerBlock.Append(countBuf)
+
+	// Phase 4: write to disk
+	// Block 0: header, Block 1: index, Blocks 2..N: data
+	// Data block K sits at file offset (2 + K) * BlockSize
+	f, err := os.Create(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	if err := WriteBlock(f, headerBlock); err != nil {
+		return nil, err
+	}
+	if err := WriteBlock(f, indexBlock); err != nil {
+		return nil, err
+	}
+	for _, db := range dataBlocks {
+		if err := WriteBlock(f, db); err != nil {
+			return nil, err
+		}
+	}
+
+	return &SSTable{Path: path}, nil
+}
 
 func (s *SSTable) Get(key string, counter *IOCounter) (KVEntry, bool, error) {
 	return KVEntry{}, false, nil

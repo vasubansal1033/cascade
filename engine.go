@@ -15,14 +15,6 @@ const (
 	L2MaxBytes = 1024 * 1024 // 1 MB
 )
 
-// Checkpoint captures all state needed to fully recover the engine after a restart.
-type Checkpoint struct {
-	L0Paths  []string  // SSTable paths in L0, newest first
-	L1Paths  []string  // SSTable paths in L1
-	L2Paths  []string  // SSTable paths in L2
-	Memtable []KVEntry // snapshot of the active memtable at checkpoint time
-}
-
 // Snapshot struct that captures in-memory, point in time disk state
 type Snapshot struct {
 	snapshotID uint64
@@ -66,8 +58,8 @@ func (e *Engine) Restart() error { return nil }
 // Compact runs a full compaction pass across all levels.
 func (e *Engine) Compact() error { return nil }
 
-func (e *Engine) IOCount() int64    { return 0 }
-func (e *Engine) ResetIOCount()     {}
+func (e *Engine) IOCount() int64        { return 0 }
+func (e *Engine) ResetIOCount()         {}
 func (e *Engine) GetCurrentDir() string { return e.dataDir }
 
 func (e *Engine) l0Dir() string          { return filepath.Join(e.dataDir, "l0") }
